@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv
+
+# But keep our env/ directory for environment definitions
+!env/
+
+# PyTorch
+*.pth
+*.pt
+*.ckpt
+checkpoints/
+
+# Data
+data/cifar-10-batches-py/
+data/cifar-10-python.tar.gz
+data/sample/
+
+# Results - track structure but not outputs
+results/csv/*.csv
+results/plots/*.png
+results/plots/*.svg
+results/plots/*.pdf
+results/logs/*.out
+results/logs/*.err
+results/logs/*.txt
+results/logs/*.nsys-rep
+results/logs/*.ncu-rep
+results/logs/*.qdrep
+
+# Keep result directories
+!results/csv/.gitkeep
+!results/plots/.gitkeep
+!results/logs/.gitkeep
+
+# Containers
+*.sif
+*.simg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Documentation builds
+docs/_build/
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.synctex.gz
+
+# Temporary files
+*.tmp
+*.bak

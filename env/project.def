@@ -1,0 +1,47 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:23.12-py3
+
+%post
+    # Update pip
+    pip install --upgrade pip
+    
+    # Install additional Python packages
+    pip install --no-cache-dir \
+        torchvision \
+        matplotlib \
+        seaborn \
+        pandas \
+        tqdm
+
+%environment
+    # Prevent Python output buffering
+    export PYTHONUNBUFFERED=1
+    
+    # NCCL debugging (set to WARN in production)
+    export NCCL_DEBUG=WARN
+    
+    # Set OMP threads (adjust based on cpus-per-task)
+    export OMP_NUM_THREADS=8
+
+%runscript
+    exec python "$@"
+
+%help
+    CIFAR-10 ResNet-18 DDP Training Container
+    
+    Built with:
+    - PyTorch 2.1+ from NVIDIA NGC
+    - CUDA 12.1+
+    - cuDNN 8.9+
+    - NCCL 2.18+
+    
+    Usage:
+        # Build
+        apptainer build hpc_pytorch.sif env/project.def
+        
+        # Run training
+        apptainer exec --nv hpc_pytorch.sif python src/train.py --epochs 5
+        
+        # Run with torchrun (DDP)
+        apptainer exec --nv hpc_pytorch.sif \
+            torchrun --nproc_per_node=4 src/train.py --epochs 5
