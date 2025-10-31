@@ -56,6 +56,11 @@ def get_args():
                         choices=['cosine', 'step', 'multistep'],
                         help='Learning rate scheduler')
     
+    # Mixed Precision
+    parser.add_argument('--precision', type=str, default='fp32',
+                        choices=['fp32', 'fp16', 'bf16'],
+                        help='Training precision (fp32, fp16, or bf16)')
+    
     # System
     parser.add_argument('--num-workers', type=int, default=4,
                         help='Number of dataloader workers')
@@ -99,7 +104,7 @@ def setup_distributed():
         return 0, 1, 0, False
 
 
-def train_epoch(train_loader, model, criterion, optimizer, epoch, args, device, rank):
+def train_epoch(train_loader, model, criterion, optimizer, epoch, args, device, rank, scaler=None):
     """Train for one epoch."""
     batch_time = AverageMeter('Time')
     data_time = AverageMeter('Data')
@@ -107,6 +112,7 @@ def train_epoch(train_loader, model, criterion, optimizer, epoch, args, device, 
     top1 = AverageMeter('Acc@1')
     
     model.train()
+    use_amp = scaler is not None
     
     end = time.time()
     for i, (images, target) in enumerate(train_loader):
@@ -116,14 +122,24 @@ def train_epoch(train_loader, model, criterion, optimizer, epoch, args, device, 
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
         
-        # Forward pass
-        output = model(images)
-        loss = criterion(output, target)
+        # Forward pass with mixed precision if enabled
+        if use_amp:
+            with torch.cuda.amp.autocast(dtype=torch.float16 if args.precision == 'fp16' else torch.bfloat16):
+                output = model(images)
+                loss = criterion(output, target)
+        else:
+            output = model(images)
+            loss = criterion(output, target)
         
         # Backward pass
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        if use_amp:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
         
         # Measure accuracy and record loss
         acc1 = accuracy(output, target, topk=(1,))[0]
@@ -256,6 +272,13 @@ def main():
     elif args.scheduler == 'multistep':
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 120, 160], gamma=0.2)
     
+    # Mixed precision scaler
+    scaler = None
+    if args.precision in ['fp16', 'bf16'] and torch.cuda.is_available():
+        scaler = torch.cuda.amp.GradScaler(enabled=(args.precision == 'fp16'))
+        if rank == 0:
+            print(f"Using mixed precision training: {args.precision}")
+    
     # CSV logger (only rank 0)
     if rank == 0:
         csv_fields = [
@@ -290,7 +313,7 @@ def main():
         
         # Train
         train_loss, train_acc = train_epoch(
-            train_loader, model, criterion, optimizer, epoch, args, device, rank
+            train_loader, model, criterion, optimizer, epoch, args, device, rank, scaler
         )
         
         # Validate
