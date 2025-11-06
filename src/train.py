@@ -60,6 +60,8 @@ def get_args():
     parser.add_argument('--precision', type=str, default='fp32',
                         choices=['fp32', 'fp16', 'bf16'],
                         help='Training precision (fp32, fp16, or bf16)')
+    parser.add_argument('--grad-accum-steps', type=int, default=1,
+                        help='Gradient accumulation steps (simulates larger batch)')
     
     # System
     parser.add_argument('--num-workers', type=int, default=4,
@@ -113,6 +115,7 @@ def train_epoch(train_loader, model, criterion, optimizer, epoch, args, device, 
     
     model.train()
     use_amp = scaler is not None
+    grad_accum_steps = args.grad_accum_steps
     
     end = time.time()
     for i, (images, target) in enumerate(train_loader):
@@ -131,19 +134,27 @@ def train_epoch(train_loader, model, criterion, optimizer, epoch, args, device, 
             output = model(images)
             loss = criterion(output, target)
         
+        # Scale loss for gradient accumulation
+        loss = loss / grad_accum_steps
+        
         # Backward pass
-        optimizer.zero_grad()
         if use_amp:
             scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
         else:
             loss.backward()
-            optimizer.step()
         
-        # Measure accuracy and record loss
+        # Update weights every grad_accum_steps
+        if (i + 1) % grad_accum_steps == 0:
+            if use_amp:
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.step()
+            optimizer.zero_grad()
+        
+        # Measure accuracy and record loss (unscaled)
         acc1 = accuracy(output, target, topk=(1,))[0]
-        losses.update(loss.item(), images.size(0))
+        losses.update(loss.item() * grad_accum_steps, images.size(0))
         top1.update(acc1, images.size(0))
         
         # Measure elapsed time
@@ -152,6 +163,7 @@ def train_epoch(train_loader, model, criterion, optimizer, epoch, args, device, 
         
         # Print progress
         if rank == 0 and i % args.print_freq == 0:
+            effective_batch = args.batch_size * grad_accum_steps
             print(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t'
                   f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
