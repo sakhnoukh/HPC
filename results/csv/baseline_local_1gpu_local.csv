@@ -1,0 +1,2 @@
+timestamp,jobid,commit,epoch,epochs,world_size,gpus,batch_per_gpu,global_batch,train_loss,train_acc,val_loss,val_acc,epoch_time_s,images_per_sec
+2025-11-08T16:41:29.034411,local,219c2bb,1,1,1,1,128,128,2.1491078992080688,28.882,1.590014699935913,39.17,277.83329582214355,179.96403149609455
