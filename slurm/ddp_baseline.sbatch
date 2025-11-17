@@ -1,14 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=cifar-ddp-baseline
-#SBATCH --account=YOUR_ACCOUNT          # CHANGE THIS
-#SBATCH --partition=gpu                  # CHANGE THIS if needed
-#SBATCH --qos=normal
+#SBATCH --partition=gpu-node
 #
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --gpus-per-node=4
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
 #
 #SBATCH --time=01:00:00
 #SBATCH --output=results/logs/baseline_%j.out
@@ -30,12 +28,11 @@ echo "=========================================="
 # Load environment (CHOOSE ONE METHOD)
 # ============================================================================
 
-# Option A: Apptainer/Singularity
-# source env/load_modules.sh  # Load apptainer module if needed
-# export CONTAINER=./hpc_pytorch.sif
+# Option A: Apptainer (SELECTED)
+export CONTAINER=./env/hpc_pytorch.sif
 
 # Option B: Modules
-source env/load_modules.sh
+# source env/load_modules.sh
 
 # Option C: Conda
 # module load anaconda3
@@ -46,15 +43,15 @@ source env/load_modules.sh
 # Set environment variables
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export NCCL_DEBUG=WARN
-export NCCL_SOCKET_IFNAME=ib0  # CHANGE THIS (ib0, eth0, etc.)
+export NCCL_SOCKET_IFNAME=eth0
 
 # Print environment info
 echo ""
 echo "Environment:"
-python --version
-python -c "import torch; print(f'PyTorch: {torch.__version__}')"
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-python -c "import torch; print(f'GPUs visible: {torch.cuda.device_count()}')"
+apptainer exec --nvccli $CONTAINER python --version
+apptainer exec --nvccli $CONTAINER python -c "import torch; print(f'PyTorch: {torch.__version__}')"
+apptainer exec --nvccli $CONTAINER python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+apptainer exec --nvccli $CONTAINER python -c "import torch; print(f'GPUs visible: {torch.cuda.device_count()}')"
 echo ""
 
 # Training parameters
@@ -78,24 +75,9 @@ echo ""
 # Run training
 # ============================================================================
 
-# Option A: With Apptainer
-# srun apptainer exec --nv $CONTAINER \
-#     python -m torch.distributed.run \
-#     --nproc_per_node=$SLURM_GPUS_PER_NODE \
-#     --nnodes=$SLURM_JOB_NUM_NODES \
-#     --node_rank=$SLURM_NODEID \
-#     --master_addr=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1) \
-#     --master_port=29500 \
-#     src/train.py \
-#     --data $DATA_DIR \
-#     --epochs $EPOCHS \
-#     --batch-size $BATCH_SIZE \
-#     --lr $LR \
-#     --results-dir $RESULTS_DIR \
-#     --exp-name $EXP_NAME
-
-# Option B: Direct execution
-srun python -m torch.distributed.run \
+# With Apptainer
+srun apptainer exec --nvccli $CONTAINER \
+    python -m torch.distributed.run \
     --nproc_per_node=$SLURM_GPUS_PER_NODE \
     --nnodes=$SLURM_JOB_NUM_NODES \
     --node_rank=$SLURM_NODEID \

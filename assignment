@@ -1,0 +1,168 @@
+1) Objective (what you’ll learn)
+Build a small-scale but realistic HPC application, run it on our Magic Castle cluster (Slurm, Alliance/EESSI modules;  you can use 6–8 CPU nodes or 2–3 GPU nodes or both), measure and explain its performance, and finish with:
+
+a working prototype (with reproducible runs),
+evidence of scaling/profiling, and
+a short EuroHPC Development Access–style proposal for a full-scale run on a supercomputer.
+2) Deliverables (what to hand in)
+Code & repo (required)
+Runs on ≥2 nodes under Slurm (run.sh and submit.sbatch).
+Repo layout (top level):
+src/            # code
+env/            # Apptainer recipe (*.def) or environment.yml + module list
+slurm/          # submit scripts, job arrays, helper scripts
+data/           # tiny sample or fetch script + README on the full dataset
+results/        # CSV + plots (PNG/SVG) + logs
+docs/           # short paper + EuroHPC proposal + README.md
+ 
+ 
+Reproducibility: exact versions, seeds, compiler flags, module load/Spack lines, Apptainer recipe (if used).
+Performance evidence
+Strong & weak scaling vs nodes (baseline: 1 node).
+Throughput/latency/efficiency plots; optionally a roofline or memory-bandwidth plot.
+Logs from sacct; profiling with perf/LIKWID/PAPI, Nsight Systems/Compute (GPU), or Intel VTune (CPU).
+A brief bottleneck analysis (compute vs memory vs I/O vs comms).
+Short paper (4–6 pages, figures included; PDF)
+Problem, approach, how you built/packaged/ran it, data, experiments, results, analysis, limits, next steps.
+EuroHPC Development Access Proposal (PDF, 6–8 pages excl. refs)
+Abstract & objectives; state of the art; current code & TRL; target EuroHPC machine & stack (MPI, compilers, CUDA/HIP/SYCL, libs); work plan (milestones/risks/needed support); resource justification; data/FAIR & ethics; expected impact.
+Node-hours formula:
+nodes × (CPU or GPU) × hours × planned runs
+Example: 8 GPU nodes × 4 h × 10 runs = 320 GPU-node-hours.
+Pitch (5 slides, 5 minutes)
+Problem & impact, 2) Approach & prototype, 3) Scaling & profiling results, 4) EuroHPC target & resource ask, 5) Risks, milestones & support needed.
+3) Indicative Timeline (exact dates can change, ask me)
+W3: Topic + 200-word abstract, repo scaffold.
+W6: Prototype v0 runs on 1 node; container/env ready.
+W9: Scaling to ≥4 nodes + first plots; profiling notes.
+W11: Proposal draft for feedback.
+W12: Final repo tag + PDF (paper + proposal) + 5-slide pitch.
+4) Rules & constraints
+Cluster: Magic Castle (Slurm), Alliance/EESSI modules available; 2–3 GPU nodes (A100/V100/MI-class) + 6–8 CPU nodes.
+Software: Prefer modules or Apptainer (recommended for portability).
+Data: keep tiny samples in repo; script the download of larger public datasets.
+Jobs: Slurm only (sbatch/srun); no long interactive runs.
+Team size: 5-7 students.
+5) Suggested workflow (checklist)
+Pick an idea (see §9). Write a 200-word problem statement + success metrics.
+Scaffold the repo (see layout above). Add a minimal sample dataset.
+Environment: either
+Modules: record module load ... in env/modules.txt, or
+Apptainer: provide env/project.def with all deps.
+Build: provide src/Makefile or setup.py/pyproject.toml.
+Baseline: run on 1 node. Save logs/CSV.
+Multi-node: scale to ≥2 nodes (and 4–8 if resources allow).
+For MPI: vary ranks × threads; for GPUs: vary GPUs per node and batch size.
+Profiling: one CPU and one GPU profile (as applicable). Identify the top 1–2 bottlenecks.
+Optimization: implement one meaningful change (e.g., better decomposition, overlapping I/O, mixed precision, kernel tuning, data-loader fix).
+Plots: strong/weak scaling, efficiency, plus any domain metric (accuracy, time-to-solution).
+Paper & proposal: write, cite, and place PDFs in docs/.
+Pitch: 5 slides in docs/.
+Tag & submit: create a release tag; include a reproduce.md with exact commands.
+6) What to measure (minimum)
+Wall-clock time, throughput (e.g., it/s, steps/s), parallel efficiency (% of ideal).
+Resource use (GPU/CPU utilization, memory BW, PCIe/NVLink traffic if available).
+I/O time (read/write), communication time (MPI, NCCL).
+Cost of data-loader / preprocessing for AI workloads.
+7) Tooling you may use
+Schedulers: Slurm (squeue, sacct, scontrol, sstat).
+CPU profiling: any performance tool such as perf, LIKWID, PAPI, VTune (if available). (TBC)
+GPU profiling: any GPU performance tool such as Nsight Systems, Nsight Compute. (TBC)
+I/O: ADIOS2, HDF5 counters, iostat.
+Scaling helpers: MPI (OpenMPI/MPICH), NCCL, Horovod, DDP, Dask/Ray (for Python).
+Packaging: Apptainer (recommended), Spack, conda/mamba (inside container), requirements.txt. (TBC)
+8) Slurm templates (drop into slurm/)
+(a) CPU-only MPI strong-scaling)
+
+ 
+#!/bin/bash
+#SBATCH -J mpi-strong
+#SBATCH -A <account>
+#SBATCH -N 4              # nodes
+#SBATCH --ntasks-per-node=16
+#SBATCH -t 00:20:00
+#SBATCH -o results/mpi_%j.out
+ 
+module purge
+source env/load_modules.sh   # or `module load openmpi gcc ...`
+srun --mpi=pmix ./src/my_mpi_app --grid 512 512 512 --iters 50 --output results/run_${SLURM_JOB_ID}.csv
+(b) Multi-GPU PyTorch DDP
+
+ 
+#!/bin/bash
+#SBATCH -J ddp-train
+#SBATCH -A <account>
+#SBATCH -N 2
+#SBATCH --gpus-per-node=4
+#SBATCH --cpus-per-task=8
+#SBATCH -t 01:00:00
+#SBATCH -o results/ddp_%j.out
+ 
+module purge
+source env/load_modules.sh   # loads cuda/python/pytorch OR `apptainer exec env/project.sif ...`
+ 
+export OMP_NUM_THREADS=8
+export NCCL_DEBUG=INFO
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
+ 
+srun --ntasks-per-node=4 --gpus-per-task=1 \
+  python -m torch.distributed.run --nproc_per_node=4 --master_port=29500 \
+  src/train.py --data ./data --batch-size 128 --epochs 1 --precision bf16 \
+  --results ./results/${SLURM_JOB_ID}
+(c) Apptainer run wrapper (run.sh)
+
+ 
+#!/usr/bin/env bash
+set -euo pipefail
+SIF=env/project.sif
+if [[ ! -f "$SIF" ]]; then apptainer build "$SIF" env/project.def; fi
+apptainer exec --nv --bind $PWD:$PWD --pwd $PWD $SIF "$@"
+
+10) Minimum experiments to run
+Strong scaling: fix problem size; double nodes until efficiency <60%.
+Weak scaling: grow problem with nodes to keep per-rank work ~constant.
+Sensitivity: one parameter sweep (e.g., batch size, preconditioner, partitioning).
+Optimization: one change that measurably improves time/throughput.
+11) Apptainer quickstart (optional but recommended)
+env/project.def (sketch):
+
+ 
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:24.04-py3    # or a CPU base if no GPU
+ 
+%post
+  apt-get update && apt-get install -y build-essential cmake git
+  pip install -U pip wheel
+  pip install mpi4py h5py adios2 cupy-cuda12x  # as needed
+  # Install your code deps here
+ 
+%environment
+  export OMP_NUM_THREADS=8
+  export PYTHONUNBUFFERED=1
+ 
+%runscript
+  exec python -m src.main "$@"
+Build & run:
+
+ 
+apptainer build env/project.sif env/project.def
+sbatch slurm/ddp_train.sbatch      # or run.sh python src/train.py ...
+12) Grading rubric (100 pts)
+Correctness & reproducibility (25): clean runs on ≥2 nodes; reproduce.md; versions fixed.
+Performance work (25): proper scaling experiments; meaningful optimization; quality of plots.
+Profiling & analysis (20): evidence (Nsight/perf/etc.), bottleneck reasoning, clarity.
+Paper quality (15): structure, figures, interpretation, related work, limitations.
+EuroHPC proposal (10): realistic ask, clear plan, risks, support needed.
+Pitch (5): clear, time-boxed, persuasive.
+13) Submission 
+Create a final release tag: v1.0-course-<teamname>.
+Upload PDFs (paper + proposal) and the slides to docs/.
+Include a one-page SYSTEM.md with node types used, module list, driver/runtime versions.
+Respect fair-use of cluster time (keep test cases small; batch long runs; clean scratch).
+14) Helpful tips
+Start with correctness on 1 node, then scale.
+Log everything (cmdline, git hash, Slurm env vars).
+For DDP/NCCL: make sure each task sees one GPU (--gpus-per-task=1), set NCCL_SOCKET_IFNAME.
+For MPI hybrid: match threads to cores; pin with --cpu-bind=cores.
+For I/O tests: document striping and dataset layout; measure warm vs cold cache.
+Put every plot under results/ and keep the CSV that generated it.

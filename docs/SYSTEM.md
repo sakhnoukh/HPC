@@ -5,47 +5,47 @@
 
 ## HPC Cluster Specifications
 
-**Cluster Name:** [YOUR_CLUSTER_NAME]  
-**Institution:** [YOUR_UNIVERSITY]  
-**Access Date:** October 2025
+**Cluster Name:** Magic Castle HPC  
+**Institution:** IE University  
+**Access Date:** November 2025
 
 ---
 
 ## Compute Nodes
 
 ### GPU Nodes
-- **Number of Nodes:** [e.g., 8 GPU nodes available]
-- **GPUs per Node:** [e.g., 4x NVIDIA A100-SXM4-40GB]
-- **GPU Memory:** [e.g., 40GB per GPU]
-- **GPU Architecture:** [e.g., Ampere (A100), Volta (V100), Hopper (H100)]
+- **Number of Nodes:** 2 GPU nodes available
+- **GPUs per Node:** 1x NVIDIA Tesla T4
+- **GPU Memory:** 16GB per GPU
+- **GPU Architecture:** Turing (T4)
 
 ### CPU Specifications
-- **Processors:** [e.g., 2x AMD EPYC 7742 (64 cores per socket)]
-- **Total Cores per Node:** [e.g., 128 cores]
-- **RAM per Node:** [e.g., 512 GB DDR4]
+- **Processors:** Intel Xeon Platinum 8473C
+- **Total Cores per Node:** 4 cores per GPU node
+- **RAM per Node:** 56 GB
 
 ### Interconnect
-- **Type:** [e.g., InfiniBand HDR 200Gb/s, Ethernet 100GbE]
-- **Topology:** [e.g., Fat-tree, Dragonfly]
-- **Interface Name:** [e.g., ib0, mlx5_0] (for NCCL_SOCKET_IFNAME)
+- **Type:** Ethernet
+- **Topology:** Standard Ethernet network
+- **Interface Name:** eth0 (for NCCL_SOCKET_IFNAME)
 
 ---
 
 ## Software Stack
 
 ### Operating System
-- **OS:** [e.g., Rocky Linux 8.8, Ubuntu 22.04]
-- **Kernel:** [e.g., 4.18.0-477.el8.x86_64]
+- **OS:** Rocky Linux 9 (el9)
+- **Kernel:** Linux (exact version TBD)
 
 ### Workload Manager
-- **Slurm Version:** [e.g., 23.02.6]
-- **Partitions Available:** [e.g., gpu, gpu-dev, gpu-long]
+- **Slurm Version:** Slurm 23.x
+- **Partitions Available:** gpu-node, cpubase_bycore_b1, node
 
 ### CUDA Ecosystem
-- **CUDA Version:** [e.g., 12.1.1]
-- **cuDNN Version:** [e.g., 8.9.2]
-- **NCCL Version:** [e.g., 2.18.3]
-- **NVIDIA Driver:** [e.g., 535.104.05]
+- **CUDA Version:** 12.4 (from NVIDIA Driver)
+- **cuDNN Version:** 8.9+ (from NGC container)
+- **NCCL Version:** 2.14.3
+- **NVIDIA Driver:** 550.144.06
 
 ### Compilers
 - **GCC:** [e.g., 11.2.0]
@@ -56,9 +56,9 @@
 - **MPICH:** [e.g., 4.0] (if available)
 
 ### Python & Deep Learning
-- **Python Version:** [e.g., 3.10.12]
-- **PyTorch Version:** [e.g., 2.0.1]
-- **torchvision Version:** [e.g., 0.15.2]
+- **Python Version:** 3.10.11 (from Apptainer container)
+- **PyTorch Version:** 2.0.1
+- **torchvision Version:** 0.15.2
 
 ---
 
@@ -120,7 +120,7 @@ QOS="normal"
 ## Environment Setup
 
 ### Chosen Strategy
-**Selected:** [ ] Apptainer  [ ] Modules  [ ] Conda
+**Selected:** [X] Apptainer  [ ] Modules  [ ] Conda
 
 ### Setup Commands
 ```bash
@@ -205,10 +205,9 @@ sacct -u $USER
 
 | Date | Config | Nodes | GPUs | Batch/GPU | Status | Notes |
 |------|--------|-------|------|-----------|--------|-------|
-| 2025-10-17 | Local | 1 | 1 | 128 | ✅ | Baseline code working |
-| TBD | Single Node | 1 | 4 | 128 | ⏳ | Testing DDP |
-| TBD | Multi-Node | 2 | 8 | 128 | ⏳ | Strong scaling |
-| TBD | Multi-Node | 3 | 12 | 128 | ⏳ | Weak scaling |
+| 2025-11-17 | 1-GPU FP32 | 1 | 1 | 128 | ✅ | Baseline: 4,460 img/s |
+| 2025-11-17 | 1-GPU FP16 | 1 | 1 | 128 | ✅ | Optimized: 7,600 img/s (1.7x speedup) |
+| 2025-11-17 | 2-GPU Multi-Node | 2 | 2 | 128 | ✅ | Scaling: 5,000 img/s (limited by network) |
 
 ---
 
@@ -224,18 +223,22 @@ sacct -u $USER
 
 ## Performance Baseline
 
-### Single GPU (Baseline)
-- **Throughput:** [e.g., 5,000 images/sec]
-- **Time per Epoch:** [e.g., 10 seconds]
-- **GPU Utilization:** [e.g., 85%]
+### Single GPU FP32 (Baseline)
+- **Throughput:** 4,460 images/sec
+- **Time per Epoch:** 11 seconds
+- **Final Accuracy:** 77.42%
 
-### 4 GPUs (Single Node)
-- **Throughput:** [TBD]
-- **Strong Scaling Efficiency:** [TBD]
+### Single GPU FP16 (Optimized)
+- **Throughput:** 7,600 images/sec
+- **Time per Epoch:** 6.6 seconds
+- **Speedup:** 1.7x over FP32
+- **Final Accuracy:** 78.7%
 
-### 8 GPUs (2 Nodes)
-- **Throughput:** [TBD]
-- **Strong Scaling Efficiency:** [TBD]
+### 2 GPUs (2 Nodes, Multi-Node)
+- **Throughput:** 5,000 images/sec (global)
+- **Time per Epoch:** 20 seconds
+- **Scaling Efficiency:** 56% (limited by inter-node communication)
+- **Final Accuracy:** 74.08%
 
 ---
 
@@ -247,5 +250,5 @@ sacct -u $USER
 
 ---
 
-**Last Updated:** 2025-10-17  
-**To Be Completed:** After first cluster access
+**Last Updated:** 2025-11-17  
+**Completed:** All experiments finished
